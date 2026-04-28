@@ -1,0 +1,22 @@
+{
+  "name": "cloud-mail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Workers 零成本多账号邮箱服务 — neumabio.xyz",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "db:init": "wrangler d1 execute cloud-mail-db --file=./schema.sql",
+    "db:create": "wrangler d1 create cloud-mail-db",
+    "gen:addresses": "npx tsx scripts/create-addresses.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240423.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^4.54.0"
+  },
+  "dependencies": {
+    "postal-mime": "^2.2.1"
+  }
+}

@@ -1,0 +1,19 @@
+name = "cloud-mail"
+main = "src/index.ts"
+compatibility_date = "2024-04-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cloud-mail-db"
+database_id = "8eb5c417-3d06-4423-9725-62ee6746004c"
+
+[[routes]]
+pattern = "mail.neumabio.xyz/*"
+zone_name = "neumabio.xyz"
+
+[vars]
+DOMAIN = "neumabio.xyz"
+
+# Admin 密码 — 通过 secret 设置更安全
+# wrangler secret put ADMIN_PASSWORD
