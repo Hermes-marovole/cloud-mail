@@ -212,6 +212,13 @@ function getHTML(env: Env): string {
     white-space: pre-wrap;
     font-size: 14px;
   }
+  .tab-btn { transition: all 0.15s; }
+  .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .html-body a { color: var(--accent); text-decoration: underline; word-break: break-all; }
+  .html-body a:visited { color: #7c3aed; }
+  .html-body img { max-width: 100%; height: auto; }
+  .html-body table { border-collapse: collapse; width: 100%; }
+  .html-body td, .html-body th { border: 1px solid #ddd; padding: 8px; }
   .empty {
     text-align: center;
     padding: 60px 20px;
@@ -439,6 +446,31 @@ async function selectAddress(address) {
   loadAddresses(); // 刷新 sidebar 高亮
 }
 
+function extractLinks(html) {
+  if (!html) return [];
+  const links = [];
+  const re = /<a\\s+[^>]*href\\s*=\\s*["']([^"']+)["'][^>]*>(.*?)<\\/a>/gi;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    let text = match[2].replace(/<[^>]+>/g, '').trim();
+    if (!text || text.length < 2) text = match[1];
+    links.push({ url: match[1], text: text });
+  }
+  return links;
+}
+
+function sanitizeHtml(html) {
+  // 移除危险标签 + 所有链接新窗口打开
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[^>]*>/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/on\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/<a\s+/gi, '<a target="_blank" rel="noopener noreferrer" ');
+}
+
 async function viewEmail(id) {
   const resp = await api('/emails/' + id);
   if (resp.ok) {
@@ -447,6 +479,47 @@ async function viewEmail(id) {
     document.getElementById('main-title').textContent = data.subject || '(无主题)';
     
     const time = new Date(data.received_at).toLocaleString('zh-CN');
+    const hasHtml = data.body_html && data.body_html.length > 10;
+    const links = hasHtml ? extractLinks(data.body_html) : [];
+    
+    let bodyContent = '';
+    if (hasHtml) {
+      // 默认显示 HTML 渲染版
+      const safeHtml = sanitizeHtml(data.body_html);
+      bodyContent = 
+        '<div style="margin-bottom:12px;display:flex;gap:6px">' +
+          '<button class="btn tab-btn active" onclick="switchTab(\\'html\\', \\'' + id + '\\')">📧 HTML</button>' +
+          '<button class="btn tab-btn" onclick="switchTab(\\'text\\', \\'' + id + '\\')">📝 纯文本</button>' +
+          '<button class="btn tab-btn" onclick="switchTab(\\'raw\\', \\'' + id + '\\')">🔍 原始</button>' +
+        '</div>' +
+        '<div id="tab-html" class="tab-content">' +
+          '<div class="html-body" style="background:#fff;color:#222;padding:20px;border-radius:8px;font-size:14px;line-height:1.6">' + safeHtml + '</div>' +
+        '</div>' +
+        '<div id="tab-text" class="tab-content" style="display:none">' +
+          '<div class="detail-body">' + escapeHtml(data.body_text || '(无文本内容)') + '</div>' +
+        '</div>' +
+        '<div id="tab-raw" class="tab-content" style="display:none">' +
+          '<div class="detail-body" style="font-family:monospace;font-size:12px;max-height:500px;overflow-y:auto">' + escapeHtml((data.body_html || '').substring(0, 10000)) + '</div>' +
+        '</div>';
+    } else {
+      bodyContent = '<div class="detail-body">' + escapeHtml(data.body_text || '(无文本内容)') + '</div>';
+    }
+    
+    // 链接提取
+    let linksHtml = '';
+    if (links.length > 0) {
+      linksHtml = '<div style="margin-top:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+        '<div style="font-weight:600;margin-bottom:12px;color:var(--accent)">🔗 邮件中的链接 (' + links.length + ')</div>' +
+        links.map((l, i) => 
+          '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">' +
+            '<span style="color:var(--text-secondary);font-size:12px;min-width:24px">#' + (i+1) + '</span>' +
+            '<button class="btn primary" style="font-size:12px;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="window.open(\\'' + escapeHtml(l.url) + '\\', \\'_blank\\')">' + escapeHtml(l.text) + '</button>' +
+            '<span style="color:var(--text-secondary);font-size:11px;word-break:break-all;flex:1">' + escapeHtml(l.url.substring(0, 80)) + '</span>' +
+          '</div>'
+        ).join('') +
+      '</div>';
+    }
+    
     document.getElementById('main-content').innerHTML = 
       '<div class="email-detail">' +
       '<div class="detail-header"><h3>' + escapeHtml(data.subject || '(无主题)') + '</h3></div>' +
@@ -455,14 +528,22 @@ async function viewEmail(id) {
         '<strong>收件人:</strong><span>' + escapeHtml(data.recipient) + '</span>' +
         '<strong>时间:</strong><span>' + time + '</span>' +
       '</div>' +
-      '<div class="detail-body">' + escapeHtml(data.body_text || '(无文本内容)') + '</div>' +
+      bodyContent +
+      linksHtml +
       '<div style="margin-top:16px;display:flex;gap:8px">' +
         '<button class="btn" onclick="selectAddress(\\'' + escapeHtml(data.recipient) + '\\')">← 返回列表</button>' +
         '<button class="btn danger" onclick="deleteEmail(\\'' + data.id + '\\')">🗑 删除</button>' +
       '</div></div>';
   }
   
-  loadAddresses(); // 刷新未读数
+  loadAddresses();
+}
+
+function switchTab(tab, id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tab).style.display = 'block';
+  event.target.classList.add('active');
 }
 
 async function deleteEmail(id) {
