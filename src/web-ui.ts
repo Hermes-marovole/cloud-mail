@@ -6,7 +6,9 @@ export async function handleWebUI(request: Request, env: Env): Promise<Response>
   return new Response(html, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     }
   });
 }
